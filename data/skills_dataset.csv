@@ -1,0 +1,465 @@
+skill,category
+python,Technical Skills
+java,Technical Skills
+javascript,Technical Skills
+typescript,Technical Skills
+c++,Technical Skills
+c#,Technical Skills
+rust,Technical Skills
+go,Technical Skills
+ruby,Technical Skills
+php,Technical Skills
+html,Technical Skills
+css,Technical Skills
+sql,Technical Skills
+nosql,Technical Skills
+machine learning,Technical Skills
+deep learning,Technical Skills
+artificial intelligence,Technical Skills
+natural language processing,Technical Skills
+nlp,Technical Skills
+computer vision,Technical Skills
+data science,Technical Skills
+data analysis,Technical Skills
+statistics,Technical Skills
+linear algebra,Technical Skills
+regression,Technical Skills
+classification,Technical Skills
+clustering,Technical Skills
+neural networks,Technical Skills
+algorithms,Technical Skills
+data structures,Technical Skills
+software engineering,Technical Skills
+oop,Technical Skills
+system design,Technical Skills
+rest api,Technical Skills
+graphql,Technical Skills
+microservices,Technical Skills
+devops,Technical Skills
+ci/cd,Technical Skills
+cloud computing,Technical Skills
+database administration,Technical Skills
+agile,Technical Skills
+scrum,Technical Skills
+project management,Technical Skills
+product management,Technical Skills
+ui/ux,Technical Skills
+web development,Technical Skills
+mobile development,Technical Skills
+ios development,Technical Skills
+android development,Technical Skills
+cybersecurity,Technical Skills
+networking,Technical Skills
+cryptography,Technical Skills
+communication,Soft Skills
+leadership,Soft Skills
+teamwork,Soft Skills
+collaboration,Soft Skills
+problem solving,Soft Skills
+critical thinking,Soft Skills
+time management,Soft Skills
+adaptability,Soft Skills
+creativity,Soft Skills
+negotiation,Soft Skills
+presentation,Soft Skills
+public speaking,Soft Skills
+active listening,Soft Skills
+conflict resolution,Soft Skills
+emotional intelligence,Soft Skills
+decision making,Soft Skills
+organization,Soft Skills
+attention to detail,Soft Skills
+work ethic,Soft Skills
+interpersonal skills,Soft Skills
+git,Tools & Technologies
+docker,Tools & Technologies
+kubernetes,Tools & Technologies
+aws,Tools & Technologies
+amazon web services,Tools & Technologies
+azure,Tools & Technologies
+gcp,Tools & Technologies
+google cloud platform,Tools & Technologies
+jenkins,Tools & Technologies
+terraform,Tools & Technologies
+ansible,Tools & Technologies
+linux,Tools & Technologies
+bash,Tools & Technologies
+vs code,Tools & Technologies
+github,Tools & Technologies
+gitlab,Tools & Technologies
+jira,Tools & Technologies
+confluence,Tools & Technologies
+tableau,Tools & Technologies
+power bi,Tools & Technologies
+powerbi,Tools & Technologies
+excel,Tools & Technologies
+pandas,Tools & Technologies
+numpy,Tools & Technologies
+scikit-learn,Tools & Technologies
+sklearn,Tools & Technologies
+tensorflow,Tools & Technologies
+keras,Tools & Technologies
+pytorch,Tools & Technologies
+spacy,Tools & Technologies
+nltk,Tools & Technologies
+flask,Tools & Technologies
+fastapi,Tools & Technologies
+django,Tools & Technologies
+react,Tools & Technologies
+angular,Tools & Technologies
+vue,Tools & Technologies
+node.js,Tools & Technologies
+spring boot,Tools & Technologies
+postgresql,Tools & Technologies
+mysql,Tools & Technologies
+mongodb,Tools & Technologies
+redis,Tools & Technologies
+sqlite,Tools & Technologies
+airflow,Tools & Technologies
+spark,Tools & Technologies
+hadoop,Tools & Technologies
+kafka,Tools & Technologies
+streamlit,Tools & Technologies
+jupyter,Tools & Technologies
+anaconda,Tools & Technologies
+slack,Tools & Technologies
+trello,Tools & Technologies
+figma,Tools & Technologies
+postman,Tools & Technologies
+maven,Tools & Technologies
+gradle,Tools & Technologies
+npm,Tools & Technologies
+yarn,Tools & Technologies
+webpack,Tools & Technologies
+vite,Tools & Technologies
+selenium,Tools & Technologies
+playwright,Tools & Technologies
+junit,Tools & Technologies
+pytest,Tools & Technologies
+splunk,Tools & Technologies
+prometheus,Tools & Technologies
+grafana,Tools & Technologies
+elk stack,Tools & Technologies
+elasticsearch,Tools & Technologies
+kibana,Tools & Technologies
+logstash,Tools & Technologies
+sentry,Tools & Technologies
+datadog,Tools & Technologies
+heroku,Tools & Technologies
+netlify,Tools & Technologies
+vercel,Tools & Technologies
+firebase,Tools & Technologies
+supabase,Tools & Technologies
+snowflake,Tools & Technologies
+databricks,Tools & Technologies
+redshift,Tools & Technologies
+bigquery,Tools & Technologies
+dynamodb,Tools & Technologies
+cassandra,Tools & Technologies
+mariadb,Tools & Technologies
+oracle database,Tools & Technologies
+salesforce,Tools & Technologies
+sap,Tools & Technologies
+wordpress,Tools & Technologies
+shopify,Tools & Technologies
+webflow,Tools & Technologies
+notion,Tools & Technologies
+zoom,Tools & Technologies
+teams,Tools & Technologies
+skype,Tools & Technologies
+googledrive,Tools & Technologies
+dropbox,Tools & Technologies
+onedrive,Tools & Technologies
+office 365,Tools & Technologies
+google workspace,Tools & Technologies
+photoshop,Tools & Technologies
+illustrator,Tools & Technologies
+indesign,Tools & Technologies
+premiere pro,Tools & Technologies
+after effects,Tools & Technologies
+xd,Tools & Technologies
+sketch,Tools & Technologies
+invision,Tools & Technologies
+canva,Tools & Technologies
+blender,Tools & Technologies
+unity,Tools & Technologies
+unreal engine,Tools & Technologies
+matlab,Tools & Technologies
+sas,Tools & Technologies
+spss,Tools & Technologies
+r programming,Tools & Technologies
+julia,Tools & Technologies
+scala,Tools & Technologies
+kotlin,Tools & Technologies
+swift,Tools & Technologies
+objective-c,Tools & Technologies
+dart,Tools & Technologies
+flutter,Tools & Technologies
+react native,Tools & Technologies
+cordova,Tools & Technologies
+xamarin,Tools & Technologies
+electron,Tools & Technologies
+django rest framework,Tools & Technologies
+drf,Tools & Technologies
+graphql,Tools & Technologies
+apollo,Tools & Technologies
+prisma,Tools & Technologies
+sequelize,Tools & Technologies
+sqlalchemy,Tools & Technologies
+hibernate,Tools & Technologies
+celery,Tools & Technologies
+redis queue,Tools & Technologies
+rq,Tools & Technologies
+rabbit mq,Tools & Technologies
+rabbitmq,Tools & Technologies
+activemq,Tools & Technologies
+zero mq,Tools & Technologies
+zeromq,Tools & Technologies
+nginx,Tools & Technologies
+apache,Tools & Technologies
+iis,Tools & Technologies
+caddy,Tools & Technologies
+cloudflare,Tools & Technologies
+route 53,Tools & Technologies
+s3,Tools & Technologies
+ec2,Tools & Technologies
+rds,Tools & Technologies
+lambda,Tools & Technologies
+fargate,Tools & Technologies
+ecs,Tools & Technologies
+eks,Tools & Technologies
+iam,Tools & Technologies
+cloudfront,Tools & Technologies
+sqs,Tools & Technologies
+sns,Tools & Technologies
+cognito,Tools & Technologies
+amplify,Tools & Technologies
+serverless framework,Tools & Technologies
+sam,Tools & Technologies
+cdk,Tools & Technologies
+cloudformation,Tools & Technologies
+azure devops,Tools & Technologies
+circleci,Tools & Technologies
+travisci,Tools & Technologies
+github actions,Tools & Technologies
+bitbucket pipelines,Tools & Technologies
+sonararqube,Tools & Technologies
+snyk,Tools & Technologies
+owasp,Tools & Technologies
+burp suite,Tools & Technologies
+wireshark,Tools & Technologies
+metasploit,Tools & Technologies
+nmap,Tools & Technologies
+nessus,Tools & Technologies
+snort,Tools & Technologies
+splunk,Tools & Technologies
+microstrategy,Tools & Technologies
+qlikview,Tools & Technologies
+qlik sense,Tools & Technologies
+looker,Tools & Technologies
+d3.js,Tools & Technologies
+chart.js,Tools & Technologies
+highcharts,Tools & Technologies
+superset,Tools & Technologies
+metabase,Tools & Technologies
+redash,Tools & Technologies
+sap analytics cloud,Tools & Technologies
+cognos,Tools & Technologies
+business objects,Tools & Technologies
+webex,Tools & Technologies
+discord,Tools & Technologies
+asana,Tools & Technologies
+monday.com,Tools & Technologies
+wrike,Tools & Technologies
+clickup,Tools & Technologies
+basecamp,Tools & Technologies
+smartsheet,Tools & Technologies
+liquidplanner,Tools & Technologies
+clarizen,Tools & Technologies
+mavenlink,Tools & Technologies
+workfront,Tools & Technologies
+planview,Tools & Technologies
+primavera,Tools & Technologies
+microsoft project,Tools & Technologies
+ms project,Tools & Technologies
+ganttpro,Tools & Technologies
+teamgantt,Tools & Technologies
+projectlibre,Tools & Technologies
+openproj,Tools & Technologies
+ganttproject,Tools & Technologies
+taskjuggler,Tools & Technologies
+redmine,Tools & Technologies
+youtrack,Tools & Technologies
+pivotal tracker,Tools & Technologies
+targetprocess,Tools & Technologies
+versionone,Tools & Technologies
+rally,Tools & Technologies
+devsuite,Tools & Technologies
+spira-team,Tools & Technologies
+spirateam,Tools & Technologies
+testrail,Tools & Technologies
+qtest,Tools & Technologies
+zephyr,Tools & Technologies
+hpe alm,Tools & Technologies
+qc,Tools & Technologies
+quality center,Tools & Technologies
+loadrunner,Tools & Technologies
+jmeter,Tools & Technologies
+gatling,Tools & Technologies
+locust,Tools & Technologies
+artillery,Tools & Technologies
+blazemeter,Tools & Technologies
+k6,Tools & Technologies
+soapui,Tools & Technologies
+readyapi,Tools & Technologies
+insomnia,Tools & Technologies
+paw,Tools & Technologies
+charles proxy,Tools & Technologies
+fiddler,Tools & Technologies
+wireshark,Tools & Technologies
+tcpdump,Tools & Technologies
+nmap,Tools & Technologies
+netcat,Tools & Technologies
+dig,Tools & Technologies
+nslookup,Tools & Technologies
+traceroute,Tools & Technologies
+ping,Tools & Technologies
+curl,Tools & Technologies
+wget,Tools & Technologies
+ssh,Tools & Technologies
+scp,Tools & Technologies
+rsync,Tools & Technologies
+ftp,Tools & Technologies
+sftp,Tools & Technologies
+telnet,Tools & Technologies
+putty,Tools & Technologies
+mobyxterm,Tools & Technologies
+iterm2,Tools & Technologies
+tmux,Tools & Technologies
+screen,Tools & Technologies
+vim,Tools & Technologies
+emacs,Tools & Technologies
+nano,Tools & Technologies
+sublime text,Tools & Technologies
+atom,Tools & Technologies
+notepad++,Tools & Technologies
+eclipse,Tools & Technologies
+intellij idea,Tools & Technologies
+webstorm,Tools & Technologies
+pycharm,Tools & Technologies
+clion,Tools & Technologies
+rider,Tools & Technologies
+datagrip,Tools & Technologies
+phpstorm,Tools & Technologies
+rubymine,Tools & Technologies
+appcode,Tools & Technologies
+android studio,Tools & Technologies
+xcode,Tools & Technologies
+visual studio,Tools & Technologies
+qt creator,Tools & Technologies
+netbeans,Tools & Technologies
+jdeveloper,Tools & Technologies
+bluej,Tools & Technologies
+greenfoot,Tools & Technologies
+drjava,Tools & Technologies
+idle,Tools & Technologies
+spyder,Tools & Technologies
+rstudio,Tools & Technologies
+jupyterlab,Tools & Technologies
+colab,Tools & Technologies
+google colab,Tools & Technologies
+kaggle,Tools & Technologies
+sagemaker,Tools & Technologies
+azure ml,Tools & Technologies
+vertex ai,Tools & Technologies
+hugging face,Tools & Technologies
+huggingface,Tools & Technologies
+wandb,Tools & Technologies
+weights & biases,Tools & Technologies
+mlflow,Tools & Technologies
+dvc,Tools & Technologies
+data version control,Tools & Technologies
+kubeflow,Tools & Technologies
+prefect,Tools & Technologies
+dagster,Tools & Technologies
+luigi,Tools & Technologies
+metaflow,Tools & Technologies
+kedro,Tools & Technologies
+great expectations,Tools & Technologies
+dbt,Tools & Technologies
+data build tool,Tools & Technologies
+fivetran,Tools & Technologies
+stitch,Tools & Technologies
+matillion,Tools & Technologies
+talend,Tools & Technologies
+informatica,Tools & Technologies
+datastage,Tools & Technologies
+ab initio,Tools & Technologies
+pentaho,Tools & Technologies
+ssis,Tools & Technologies
+sql server integration services,Tools & Technologies
+alteryx,Tools & Technologies
+knime,Tools & Technologies
+rapidminer,Tools & Technologies
+weka,Tools & Technologies
+orange,Tools & Technologies
+h2o.ai,Tools & Technologies
+datarobot,Tools & Technologies
+domo,Tools & Technologies
+sisense,Tools & Technologies
+yellowfin,Tools & Technologies
+targit,Tools & Technologies
+board,Tools & Technologies
+pyramid analytics,Tools & Technologies
+dundas bi,Tools & Technologies
+logi analytics,Tools & Technologies
+jreport,Tools & Technologies
+jasperreports,Tools & Technologies
+pentaho reports,Tools & Technologies
+birt,Tools & Technologies
+crystal reports,Tools & Technologies
+ssrs,Tools & Technologies
+sql server reporting services,Tools & Technologies
+active reports,Tools & Technologies
+stimulsoft,Tools & Technologies
+fastreport,Tools & Technologies
+telerik reporting,Tools & Technologies
+devexpress reporting,Tools & Technologies
+jsreport,Tools & Technologies
+carbone,Tools & Technologies
+docmosis,Tools & Technologies
+windward,Tools & Technologies
+aspose,Tools & Technologies
+pdfbox,Tools & Technologies
+itext,Tools & Technologies
+reportlab,Tools & Technologies
+fpdf,Tools & Technologies
+weasyprint,Tools & Technologies
+wkhtmltopdf,Tools & Technologies
+phantomjs,Tools & Technologies
+puppeteer,Tools & Technologies
+jsdom,Tools & Technologies
+cheerio,Tools & Technologies
+beautifulsoup,Tools & Technologies
+scrapy,Tools & Technologies
+lxml,Tools & Technologies
+html5lib,Tools & Technologies
+requests,Tools & Technologies
+urllib3,Tools & Technologies
+aiohttp,Tools & Technologies
+httpx,Tools & Technologies
+axios,Tools & Technologies
+fetch api,Tools & Technologies
+superagent,Tools & Technologies
+request-promise,Tools & Technologies
+got,Tools & Technologies
+node-fetch,Tools & Technologies
+supertest,Tools & Technologies
+nock,Tools & Technologies
+msw,Tools & Technologies
+mock service worker,Tools & Technologies
+miragejs,Tools & Technologies
+json server,Tools & Technologies
+faker,Tools & Technologies
+chance,Tools & Technologies
+mockaroo,Tools & Technologies
