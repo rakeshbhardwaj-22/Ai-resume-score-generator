@@ -1,10 +1,7 @@
-import streamlit as st
 import os
-import pandas as pd
 import json
-from typing import Dict, Any, List
-
-# Import project modules
+import datetime
+from flask import Flask, request, jsonify, render_template_string
 from parser.resume_parser import ResumeParser
 from parser.jd_parser import JobDescriptionParser
 from utils.skill_extractor import SkillExtractor
@@ -12,618 +9,1198 @@ from database.db import DatabaseManager
 from models.similarity_model import ResumeSimilarityModel
 from models.ats_model import ATSModel
 from utils.ats_score import ATSScorer
-from dashboard.visualizations import (
-    create_gauge_chart,
-    create_radar_chart,
-    create_skill_donut_chart,
-    create_leaderboard_chart,
-    create_keyword_bar_chart
-)
 
-# ----------------- PAGE CONFIG & THEME SETUP -----------------
-st.set_page_config(
-    page_title="AI Resume Screening & ATS Analyzer",
-    page_icon="🎯",
-    layout="wide",
-    initial_sidebar_state="expanded"
-)
+app = Flask(__name__)
 
-# Inject custom CSS for premium design (fonts, cards, clean borders, dynamic spacing)
-st.markdown("""
-<style>
-    @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap');
-    
-    html, body, [class*="css"], .stApp {
-        font-family: 'Plus Jakarta Sans', sans-serif;
-        background-color: #F8FAFC;
-        color: #1E293B;
-    }
-    
-    /* Premium Header styling */
-    .header-container {
-        background: linear-gradient(135deg, #1E3A8A 0%, #3B82F6 100%);
-        padding: 2.5rem;
-        border-radius: 16px;
-        margin-bottom: 2rem;
-        color: white;
-        text-align: center;
-        box-shadow: 0 10px 25px -5px rgba(59, 130, 246, 0.3);
-    }
-    
-    .header-container h1 {
-        font-weight: 800;
-        font-size: 2.8rem;
-        margin-bottom: 0.5rem;
-        color: white;
-        letter-spacing: -0.025em;
-    }
-    
-    .header-container p {
-        font-size: 1.15rem;
-        font-weight: 300;
-        opacity: 0.9;
-        margin: 0;
-    }
-    
-    /* Card Container */
-    .premium-card {
-        background-color: white;
-        padding: 2rem;
-        border-radius: 12px;
-        border: 1px solid #E2E8F0;
-        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03);
-        margin-bottom: 1.5rem;
-    }
-    
-    .card-title {
-        font-weight: 700;
-        font-size: 1.35rem;
-        color: #0F172A;
-        margin-bottom: 1.25rem;
-        border-bottom: 2px solid #3B82F6;
-        padding-bottom: 0.5rem;
-    }
-    
-    /* Pill styling */
-    .skill-pill {
-        display: inline-block;
-        padding: 0.35rem 0.85rem;
-        margin: 0.25rem;
-        border-radius: 9999px;
-        font-size: 0.85rem;
-        font-weight: 500;
-        transition: all 0.2s ease;
-    }
-    
-    .pill-found {
-        background-color: #DCFCE7;
-        color: #15803D;
-        border: 1px solid #BBF7D0;
-    }
-    
-    .pill-missing {
-        background-color: #FEE2E2;
-        color: #B91C1C;
-        border: 1px solid #FCA5A5;
-    }
-    
-    /* Badge grading */
-    .badge {
-        padding: 0.5rem 1rem;
-        border-radius: 6px;
-        font-weight: 700;
-        text-align: center;
-        display: inline-block;
-        font-size: 1rem;
-    }
-    
-    .badge-strong { background-color: #D1FAE5; color: #065F46; }
-    .badge-good { background-color: #DBEAFE; color: #1E40AF; }
-    .badge-average { background-color: #FEF3C7; color: #92400E; }
-    .badge-needs { background-color: #FEE2E2; color: #991B1B; }
+# Route SQLite to /tmp on Vercel as Vercel runs on a read-only filesystem (except /tmp)
+db_path = "/tmp/resume_screening.db" if os.environ.get("VERCEL") or os.environ.get("NOW_REGION") else "resume_screening.db"
+db = DatabaseManager(db_path)
 
-    /* Fix streamlit margins */
-    div.block-container {
-        padding-top: 2rem;
-        padding-bottom: 2rem;
-    }
-</style>
-""", unsafe_allow_html=True)
+r_parser = ResumeParser()
+jd_parser = JobDescriptionParser()
+skill_extractor = SkillExtractor()
+sim_model = ResumeSimilarityModel()
+ats_model = ATSModel()
+ats_scorer = ATSScorer()
 
-# ----------------- INITIALIZE SYSTEMS -----------------
-@st.cache_resource
-def init_systems():
-    """Cache the system objects to prevent reloading databases and NLP components on rerun."""
-    db = DatabaseManager("resume_screening.db")
-    resume_parser = ResumeParser()
-    jd_parser = JobDescriptionParser()
-    skill_extractor = SkillExtractor()
-    similarity_model = ResumeSimilarityModel()
-    ats_model = ATSModel()
-    ats_scorer = ATSScorer()
-    return db, resume_parser, jd_parser, skill_extractor, similarity_model, ats_model, ats_scorer
+HTML_TEMPLATE = """
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Resume Screening & ATS Analyzer</title>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/apexcharts"></script>
+    <style>
+        :root {
+            --bg-primary: #0b0f19;
+            --bg-secondary: #111827;
+            --bg-tertiary: #1f2937;
+            --border-color: #374151;
+            --text-primary: #f3f4f6;
+            --text-secondary: #9ca3af;
+            --accent-primary: #3b82f6;
+            --accent-glow: rgba(59, 130, 246, 0.15);
+            --success: #10b981;
+            --warning: #f59e0b;
+            --danger: #ef4444;
+            --card-gradient: linear-gradient(135deg, #111827 0%, #1e293b 100%);
+        }
 
-db, r_parser, jd_parser, skill_extractor, sim_model, ats_model, ats_scorer = init_systems()
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
 
-# ----------------- APP LAYOUT & BANNERS -----------------
-st.markdown("""
-<div class="header-container">
-    <h1>AI-Based Resume Screening & ATS Analyzer</h1>
-    <p>Optimize your resume for applicant tracking systems or rank multiple candidates instantly using NLP & ML</p>
-</div>
-""", unsafe_allow_html=True)
+        body {
+            font-family: 'Plus Jakarta Sans', sans-serif;
+            background-color: var(--bg-primary);
+            color: var(--text-primary);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            overflow-x: hidden;
+        }
 
-# Main Navigation
-portal_option = st.sidebar.radio(
-    "Choose Portal View",
-    ["Job Seeker: Optimize Resume", "Recruiter: Candidate Leaderboard"]
-)
+        header {
+            background-color: var(--bg-secondary);
+            border-bottom: 1px solid var(--border-color);
+            padding: 1.25rem 2rem;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+            backdrop-filter: blur(12px);
+            background-color: rgba(17, 24, 39, 0.85);
+        }
 
-# ----------------- PORTAL 1: JOB SEEKER -----------------
-if portal_option == "Job Seeker: Optimize Resume":
-    st.subheader("🔍 Resume Optimization Portal")
-    
-    col1, col2 = st.columns([1, 1])
-    
-    with col1:
-        st.markdown('<div class="premium-card"><div class="card-title">1. Upload Resume</div>', unsafe_allow_html=True)
-        uploaded_resume = st.file_uploader("Upload Resume (PDF or DOCX)", type=["pdf", "docx"])
-        st.markdown('</div>', unsafe_allow_html=True)
+        .logo-container {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+        }
 
-    with col2:
-        st.markdown('<div class="premium-card"><div class="card-title">2. Job Description</div>', unsafe_allow_html=True)
-        jd_input_method = st.radio("Input Method", ["Paste Text", "Upload PDF/DOCX"], horizontal=True)
+        .logo-icon {
+            font-size: 1.75rem;
+            animation: pulse 2s infinite;
+        }
+
+        .logo-text {
+            font-weight: 800;
+            font-size: 1.35rem;
+            letter-spacing: -0.025em;
+            background: linear-gradient(135deg, #60a5fa 0%, #3b82f6 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .tagline {
+            font-size: 0.85rem;
+            color: var(--text-secondary);
+            font-weight: 500;
+            padding: 0.25rem 0.75rem;
+            border-radius: 9999px;
+            background-color: var(--bg-tertiary);
+            border: 1px solid var(--border-color);
+        }
+
+        .main-container {
+            max-width: 1400px;
+            margin: 2rem auto;
+            padding: 0 1.5rem;
+            width: 100%;
+            display: grid;
+            grid-template-columns: 450px 1fr;
+            gap: 2rem;
+            flex-grow: 1;
+        }
+
+        @media (max-width: 1024px) {
+            .main-container {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        .card {
+            background: var(--card-gradient);
+            border: 1px solid var(--border-color);
+            border-radius: 16px;
+            padding: 2rem;
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.3);
+            position: relative;
+            transition: all 0.3s ease;
+        }
+
+        .card:hover {
+            border-color: #4b5563;
+        }
+
+        .card-title {
+            font-size: 1.25rem;
+            font-weight: 700;
+            margin-bottom: 1.5rem;
+            border-bottom: 1px solid var(--border-color);
+            padding-bottom: 0.75rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .form-group {
+            margin-bottom: 1.5rem;
+        }
+
+        label {
+            display: block;
+            font-size: 0.875rem;
+            font-weight: 600;
+            color: var(--text-secondary);
+            margin-bottom: 0.5rem;
+        }
+
+        .input-control {
+            width: 100%;
+            background-color: var(--bg-primary);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 0.75rem 1rem;
+            color: var(--text-primary);
+            font-family: inherit;
+            font-size: 0.95rem;
+            transition: border-color 0.2s, box-shadow 0.2s;
+        }
+
+        .input-control:focus {
+            outline: none;
+            border-color: var(--accent-primary);
+            box-shadow: 0 0 0 3px var(--accent-glow);
+        }
+
+        textarea.input-control {
+            resize: vertical;
+            min-height: 120px;
+        }
+
+        .upload-zone {
+            border: 2px dashed var(--border-color);
+            border-radius: 12px;
+            padding: 2rem;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            background-color: rgba(17, 24, 39, 0.4);
+            position: relative;
+        }
+
+        .upload-zone:hover, .upload-zone.dragover {
+            border-color: var(--accent-primary);
+            background-color: var(--accent-glow);
+        }
+
+        .upload-icon {
+            font-size: 2rem;
+            color: var(--text-secondary);
+            margin-bottom: 0.75rem;
+        }
+
+        .upload-text {
+            font-size: 0.9rem;
+            color: var(--text-secondary);
+        }
+
+        .upload-text strong {
+            color: var(--accent-primary);
+        }
+
+        .file-info {
+            margin-top: 1rem;
+            padding: 0.5rem 1rem;
+            background-color: var(--bg-tertiary);
+            border-radius: 6px;
+            display: none;
+            align-items: center;
+            justify-content: space-between;
+            font-size: 0.85rem;
+        }
+
+        .remove-file {
+            color: var(--danger);
+            cursor: pointer;
+            font-weight: bold;
+            font-size: 1rem;
+        }
+
+        input[type="file"] {
+            display: none;
+        }
+
+        .btn-primary {
+            width: 100%;
+            background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%);
+            border: none;
+            border-radius: 10px;
+            padding: 1rem;
+            color: white;
+            font-family: inherit;
+            font-weight: 700;
+            font-size: 1rem;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            box-shadow: 0 4px 6px -1px rgba(59, 130, 246, 0.4);
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 15px -3px rgba(59, 130, 246, 0.5);
+        }
+
+        .btn-primary:active {
+            transform: translateY(0);
+        }
+
+        .results-container {
+            display: flex;
+            flex-direction: column;
+            gap: 2rem;
+        }
+
+        .placeholder-results {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 400px;
+            text-align: center;
+            color: var(--text-secondary);
+        }
+
+        .placeholder-icon {
+            font-size: 4rem;
+            margin-bottom: 1.5rem;
+            opacity: 0.5;
+        }
+
+        .placeholder-title {
+            font-size: 1.5rem;
+            font-weight: 700;
+            margin-bottom: 0.5rem;
+            color: var(--text-primary);
+        }
+
+        .placeholder-desc {
+            max-width: 400px;
+            font-size: 0.95rem;
+            line-height: 1.5;
+        }
+
+        .loading-screen {
+            display: none;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(11, 15, 25, 0.85);
+            border-radius: 16px;
+            z-index: 10;
+            backdrop-filter: blur(8px);
+        }
+
+        .spinner {
+            width: 50px;
+            height: 50px;
+            border: 5px solid rgba(59, 130, 246, 0.2);
+            border-top-color: var(--accent-primary);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin-bottom: 1.5rem;
+        }
+
+        .dashboard-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1.5rem;
+            flex-wrap: wrap;
+            gap: 1rem;
+        }
+
+        .candidate-title {
+            font-size: 1.5rem;
+            font-weight: 800;
+        }
+
+        .match-badge {
+            padding: 0.5rem 1rem;
+            border-radius: 8px;
+            font-weight: 700;
+            font-size: 0.9rem;
+            display: inline-block;
+        }
+
+        .match-strong { background-color: rgba(16, 185, 129, 0.15); color: var(--success); border: 1px solid var(--success); }
+        .match-good { background-color: rgba(59, 130, 246, 0.15); color: var(--accent-primary); border: 1px solid var(--accent-primary); }
+        .match-average { background-color: rgba(245, 158, 11, 0.15); color: var(--warning); border: 1px solid var(--warning); }
+        .match-needs { background-color: rgba(239, 68, 68, 0.15); color: var(--danger); border: 1px solid var(--danger); }
+
+        .candidate-meta {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1rem;
+            background-color: var(--bg-secondary);
+            border: 1px solid var(--border-color);
+            padding: 1.25rem;
+            border-radius: 12px;
+            margin-bottom: 1.5rem;
+        }
+
+        .meta-item {
+            font-size: 0.85rem;
+            color: var(--text-secondary);
+        }
+
+        .meta-item strong {
+            display: block;
+            font-size: 0.95rem;
+            color: var(--text-primary);
+            margin-top: 0.25rem;
+        }
+
+        .charts-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 1.5rem;
+            margin-bottom: 1.5rem;
+        }
+
+        @media (max-width: 768px) {
+            .charts-row {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        .chart-box {
+            background-color: rgba(17, 24, 39, 0.6);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            padding: 1.5rem;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .chart-box-title {
+            align-self: flex-start;
+            font-size: 0.95rem;
+            font-weight: 700;
+            color: var(--text-secondary);
+            margin-bottom: 1rem;
+        }
+
+        .skills-section {
+            background-color: rgba(17, 24, 39, 0.6);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            padding: 1.5rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .skill-group-title {
+            font-size: 0.95rem;
+            font-weight: 700;
+            color: var(--text-primary);
+            margin-bottom: 0.75rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .skill-pills {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.5rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .skill-pill {
+            padding: 0.35rem 0.85rem;
+            border-radius: 9999px;
+            font-size: 0.8rem;
+            font-weight: 600;
+            border: 1px solid transparent;
+            transition: all 0.2s;
+        }
+
+        .skill-pill.found {
+            background-color: rgba(16, 185, 129, 0.1);
+            color: var(--success);
+            border-color: rgba(16, 185, 129, 0.3);
+        }
+
+        .skill-pill.missing {
+            background-color: rgba(239, 68, 68, 0.08);
+            color: #fca5a5;
+            border-color: rgba(239, 68, 68, 0.2);
+            text-decoration: line-through;
+            opacity: 0.75;
+        }
+
+        .recommendations-section {
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+        }
+
+        .rec-box {
+            border-left: 4px solid var(--accent-primary);
+            background-color: rgba(31, 41, 55, 0.4);
+            border-radius: 0 12px 12px 0;
+            padding: 1rem 1.25rem;
+        }
+
+        .rec-box.success { border-left-color: var(--success); }
+        .rec-box.warning { border-left-color: var(--warning); }
+        .rec-box.danger { border-left-color: var(--danger); }
+
+        .rec-title {
+            font-size: 0.95rem;
+            font-weight: 700;
+            margin-bottom: 0.5rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .rec-list {
+            padding-left: 1.25rem;
+            font-size: 0.875rem;
+            color: var(--text-secondary);
+            line-height: 1.6;
+        }
+
+        .rec-list li {
+            margin-bottom: 0.25rem;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        @keyframes pulse {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.08); }
+            100% { transform: scale(1); }
+        }
+
+        footer {
+            margin-top: auto;
+            text-align: center;
+            padding: 2rem;
+            border-top: 1px solid var(--border-color);
+            color: var(--text-secondary);
+            font-size: 0.85rem;
+        }
+
+        /* Responsive tabs */
+        .tabs-header {
+            display: flex;
+            border-bottom: 1px solid var(--border-color);
+            margin-bottom: 1.5rem;
+            gap: 1.5rem;
+        }
+
+        .tab-btn {
+            background: none;
+            border: none;
+            color: var(--text-secondary);
+            font-family: inherit;
+            font-size: 0.95rem;
+            font-weight: 600;
+            padding: 0.75rem 0.5rem;
+            cursor: pointer;
+            position: relative;
+            transition: color 0.2s;
+        }
+
+        .tab-btn:hover {
+            color: var(--text-primary);
+        }
+
+        .tab-btn.active {
+            color: var(--accent-primary);
+        }
+
+        .tab-btn.active::after {
+            content: '';
+            position: absolute;
+            bottom: -1px;
+            left: 0;
+            width: 100%;
+            height: 2px;
+            background-color: var(--accent-primary);
+        }
+
+        .tab-content {
+            display: none;
+        }
+
+        .tab-content.active {
+            display: block;
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <div class="logo-container">
+            <span class="logo-icon">🎯</span>
+            <span class="logo-text">AI Resume Screener</span>
+        </div>
+        <span class="tagline">NLP & ML-powered ATS Optimizer</span>
+    </header>
+
+    <div class="main-container">
+        <!-- Input Panel -->
+        <div class="card" style="height: fit-content;">
+            <div class="card-title">
+                <span>⚡</span> Analyze Profile
+            </div>
+            
+            <form id="analyzeForm" enctype="multipart/form-data">
+                <div class="form-group">
+                    <label>1. Upload Candidate Resume</label>
+                    <div class="upload-zone" id="uploadZone">
+                        <div class="upload-icon">📁</div>
+                        <div class="upload-text">Drag & drop or <strong>browse file</strong></div>
+                        <p style="font-size: 0.75rem; color: var(--text-secondary); margin-top: 0.25rem;">Supports PDF & DOCX</p>
+                    </div>
+                    <input type="file" id="resumeFile" name="resume" accept=".pdf,.docx">
+                    <div class="file-info" id="fileInfo">
+                        <span id="fileName" style="font-weight: 600;">resume.pdf</span>
+                        <span class="remove-file" id="removeFile">&times;</span>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label for="jdText">2. Paste Job Description</label>
+                    <textarea class="input-control" id="jdText" name="jd_text" placeholder="We are seeking a Senior Backend Engineer... Experience with Python, SQL, AWS, and docker is required."></textarea>
+                </div>
+
+                <div class="form-group">
+                    <label for="minExperience">3. Minimum Experience (Years)</label>
+                    <input type="number" class="input-control" id="minExperience" name="min_experience" min="0" max="30" value="0">
+                </div>
+
+                <div class="form-group">
+                    <label for="educationRequirement">4. Education Requirement</label>
+                    <select class="input-control" id="educationRequirement" name="education_requirement">
+                        <option value="Not Specified">Not Specified</option>
+                        <option value="Bachelor's Degree">Bachelor's Degree</option>
+                        <option value="Master's Degree">Master's Degree</option>
+                        <option value="PhD / Doctorate">PhD / Doctorate</option>
+                    </select>
+                </div>
+
+                <button type="submit" class="btn-primary" id="submitBtn">🚀 Run Analytics</button>
+            </form>
+        </div>
+
+        <!-- Output / Dashboard Panel -->
+        <div class="card" id="resultsCard" style="min-height: 500px;">
+            <div class="loading-screen" id="loadingScreen">
+                <div class="spinner"></div>
+                <h3 style="font-weight: 700; margin-bottom: 0.5rem;">Running NLP Analysis</h3>
+                <p style="color: var(--text-secondary); font-size: 0.9rem;">Extracting details & predicting ATS scores...</p>
+            </div>
+
+            <!-- Placeholder state -->
+            <div class="placeholder-results" id="placeholderState">
+                <span class="placeholder-icon">📊</span>
+                <h3 class="placeholder-title">Interactive Match Dashboard</h3>
+                <p class="placeholder-desc">Upload a resume and input job requirements on the left, then click 'Run Analytics' to view semantic fit, skill alignment, and recommendations.</p>
+            </div>
+
+            <!-- Analysis results content (hidden initially) -->
+            <div id="resultsContent" style="display: none;">
+                <div class="dashboard-header">
+                    <div>
+                        <h2 class="candidate-title" id="resCandidateName">John Doe</h2>
+                        <p id="resFileName" style="font-size: 0.85rem; color: var(--text-secondary);">resume.pdf</p>
+                    </div>
+                    <span class="match-badge" id="resGradeBadge">Strong Match</span>
+                </div>
+
+                <!-- Meta Row -->
+                <div class="candidate-meta">
+                    <div class="meta-item">
+                        Email
+                        <strong id="resEmail">johndoe@example.com</strong>
+                    </div>
+                    <div class="meta-item">
+                        Phone
+                        <strong id="resPhone">+1-234-567-8900</strong>
+                    </div>
+                    <div class="meta-item">
+                        Experience Detected
+                        <strong id="resExperience">5.5 Years</strong>
+                    </div>
+                    <div class="meta-item">
+                        Education Detected
+                        <strong id="resEducation">Bachelor's</strong>
+                    </div>
+                </div>
+
+                <!-- Charts Area -->
+                <div class="charts-row">
+                    <div class="chart-box">
+                        <div class="chart-box-title">Predicted ATS Match Score</div>
+                        <div id="gaugeChart" style="width: 100%; min-height: 220px;"></div>
+                    </div>
+                    <div class="chart-box">
+                        <div class="chart-box-title">Score Components Breakdown</div>
+                        <div id="radarChart" style="width: 100%; min-height: 220px;"></div>
+                    </div>
+                </div>
+
+                <!-- Navigation Tabs -->
+                <div class="tabs-header">
+                    <button class="tab-btn active" onclick="switchTab('tabSkills')">🎯 Skill Gap Analysis</button>
+                    <button class="tab-btn" onclick="switchTab('tabRecommendations')">💡 Actionable Recommendations</button>
+                </div>
+
+                <!-- Tab 1: Skills -->
+                <div class="tab-content active" id="tabSkills">
+                    <div class="skills-section">
+                        <h3 class="skill-group-title">🛠️ Technical Skills</h3>
+                        <div class="skill-pills" id="techSkillsContainer"></div>
+
+                        <h3 class="skill-group-title">⚙️ Tools & Technologies</h3>
+                        <div class="skill-pills" id="toolSkillsContainer"></div>
+
+                        <h3 class="skill-group-title">💬 Soft Skills</h3>
+                        <div class="skill-pills" id="softSkillsContainer"></div>
+                    </div>
+                </div>
+
+                <!-- Tab 2: Recommendations -->
+                <div class="tab-content" id="tabRecommendations">
+                    <div class="recommendations-section">
+                        <div class="rec-box warning" id="recStructureBox">
+                            <h4 class="rec-title">🧱 Formatting & Section Structure</h4>
+                            <ul class="rec-list" id="recStructureList"></ul>
+                        </div>
+                        <div class="rec-box danger" id="recSeoBox">
+                            <h4 class="rec-title">🔍 ATS SEO & Keyword Stuffing</h4>
+                            <ul class="rec-list" id="recSeoList"></ul>
+                        </div>
+                        <div class="rec-box" id="recPhrasingBox">
+                            <h4 class="rec-title">✍️ Phrasing & Language Improvement</h4>
+                            <ul class="rec-list" id="recPhrasingList"></ul>
+                        </div>
+                        <div class="rec-box success" id="recRemediationBox">
+                            <h4 class="rec-title">📚 Skills Gap Remediation</h4>
+                            <ul class="rec-list" id="recRemediationList"></ul>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <footer>
+        <p>AI-Based Resume Screening and ATS Analyzer &copy; 2026. Made with Python, Flask, spaCy and ApexCharts.</p>
+    </footer>
+
+    <script>
+        const uploadZone = document.getElementById('uploadZone');
+        const resumeFileInput = document.getElementById('resumeFile');
+        const fileInfo = document.getElementById('fileInfo');
+        const fileNameSpan = document.getElementById('fileName');
+        const removeFile = document.getElementById('removeFile');
+        const analyzeForm = document.getElementById('analyzeForm');
+        const loadingScreen = document.getElementById('loadingScreen');
+        const placeholderState = document.getElementById('placeholderState');
+        const resultsContent = document.getElementById('resultsContent');
+
+        let gaugeChartInstance = null;
+        let radarChartInstance = null;
+
+        // File Selection Event Listeners
+        uploadZone.addEventListener('click', () => resumeFileInput.click());
+
+        uploadZone.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            uploadZone.classList.add('dragover');
+        });
+
+        uploadZone.addEventListener('dragleave', () => {
+            uploadZone.classList.remove('dragover');
+        });
+
+        uploadZone.addEventListener('drop', (e) => {
+            e.preventDefault();
+            uploadZone.classList.remove('dragover');
+            if (e.dataTransfer.files.length > 0) {
+                resumeFileInput.files = e.dataTransfer.files;
+                updateFileInfo();
+            }
+        });
+
+        resumeFileInput.addEventListener('change', updateFileInfo);
+
+        removeFile.addEventListener('click', (e) => {
+            e.stopPropagation();
+            resumeFileInput.value = '';
+            fileInfo.style.display = 'none';
+            uploadZone.style.display = 'block';
+        });
+
+        function updateFileInfo() {
+            if (resumeFileInput.files.length > 0) {
+                fileNameSpan.textContent = resumeFileInput.files[0].name;
+                uploadZone.style.display = 'none';
+                fileInfo.style.display = 'flex';
+            }
+        }
+
+        // Form Submit
+        analyzeForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            if (!resumeFileInput.files || resumeFileInput.files.length === 0) {
+                alert('Please upload a resume file first.');
+                return;
+            }
+            if (!document.getElementById('jdText').value.trim()) {
+                alert('Please provide a Job Description.');
+                return;
+            }
+
+            // Show loading
+            loadingScreen.style.display = 'flex';
+
+            const formData = new FormData(analyzeForm);
+
+            try {
+                const response = await fetch('/analyze', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                if (!response.ok) {
+                    const errData = await response.json();
+                    throw new Error(errData.error || 'Server error during analysis');
+                }
+
+                const data = await response.json();
+                renderResults(data);
+            } catch (error) {
+                alert('Analysis failed: ' + error.message);
+                console.error(error);
+            } finally {
+                loadingScreen.style.display = 'none';
+            }
+        });
+
+        // Tab Switching
+        window.switchTab = function(tabId) {
+            document.querySelectorAll('.tab-btn').forEach(btn => {
+                btn.classList.remove('active');
+            });
+            document.querySelectorAll('.tab-content').forEach(content => {
+                content.classList.remove('active');
+            });
+
+            // Find clicked button
+            const clickedBtn = Array.from(document.querySelectorAll('.tab-btn')).find(
+                btn => btn.getAttribute('onclick').includes(tabId)
+            );
+            if (clickedBtn) clickedBtn.classList.add('active');
+
+            const targetContent = document.getElementById(tabId);
+            if (targetContent) targetContent.classList.add('active');
+        };
+
+        // Render Results Data
+        function renderResults(data) {
+            placeholderState.style.display = 'none';
+            resultsContent.style.display = 'block';
+
+            // Candidate Info
+            document.getElementById('resCandidateName').textContent = data.candidate_details.name;
+            document.getElementById('resFileName').textContent = resumeFileInput.files[0].name;
+            document.getElementById('resEmail').textContent = data.candidate_details.email;
+            document.getElementById('resPhone').textContent = data.candidate_details.phone;
+            document.getElementById('resExperience').textContent = data.candidate_details.extracted_experience + ' Years';
+            document.getElementById('resEducation').textContent = data.candidate_details.education_detected;
+
+            // Grade Badge
+            const badge = document.getElementById('resGradeBadge');
+            badge.textContent = data.score_details.grade;
+            badge.className = 'match-badge';
+            
+            const grade = data.score_details.grade;
+            if (grade === "Strong Match") badge.classList.add('match-strong');
+            else if (grade === "Good Match") badge.classList.add('match-good');
+            else if (grade === "Average Match") badge.classList.add('match-average');
+            else badge.classList.add('match-needs');
+
+            // Render Charts
+            renderGaugeChart(data.score_details.ats_score);
+            renderRadarChart(data.score_details.breakdown);
+
+            // Render Skills
+            renderSkills('techSkillsContainer', data.gap_analysis.found_skills["Technical Skills"], data.gap_analysis.missing_skills["Technical Skills"]);
+            renderSkills('toolSkillsContainer', data.gap_analysis.found_skills["Tools & Technologies"], data.gap_analysis.missing_skills["Tools & Technologies"]);
+            renderSkills('softSkillsContainer', data.gap_analysis.found_skills["Soft Skills"], data.gap_analysis.missing_skills["Soft Skills"]);
+
+            // Render Recommendations
+            renderList('recStructureList', data.suggestions.structure_and_formatting, 'recStructureBox', 'Your resume structure contains all essential sections.');
+            renderList('recSeoList', data.suggestions.seo_and_keyword_stuffing, 'recSeoBox', 'Keyword density looks natural and optimized.');
+            renderList('recPhrasingList', data.suggestions.phrasing_and_language, 'recPhrasingBox', 'Phrasing is clear and contains strong action verbs.');
+            renderList('recRemediationList', data.suggestions.skills_gap_remediation, 'recRemediationBox', 'No critical skills gaps detected against the Job Description.');
+
+            // Reset tab
+            switchTab('tabSkills');
+        }
+
+        function renderSkills(containerId, found, missing) {
+            const container = document.getElementById(containerId);
+            container.innerHTML = '';
+            
+            if ((!found || found.length === 0) && (!missing || missing.length === 0)) {
+                container.innerHTML = '<span style="font-size: 0.85rem; color: var(--text-secondary); font-style: italic;">No skills matching this category detected.</span>';
+                return;
+            }
+
+            if (found) {
+                found.forEach(s => {
+                    const span = document.createElement('span');
+                    span.className = 'skill-pill found';
+                    span.textContent = s;
+                    container.appendChild(span);
+                });
+            }
+
+            if (missing) {
+                missing.forEach(s => {
+                    const span = document.createElement('span');
+                    span.className = 'skill-pill missing';
+                    span.textContent = s;
+                    container.appendChild(span);
+                });
+            }
+        }
+
+        function renderList(listId, items, boxId, emptyMsg) {
+            const list = document.getElementById(listId);
+            const box = document.getElementById(boxId);
+            list.innerHTML = '';
+
+            if (!items || items.length === 0) {
+                list.innerHTML = `<li>✨ ${emptyMsg}</li>`;
+                box.style.opacity = '0.8';
+                return;
+            }
+
+            box.style.opacity = '1';
+            items.forEach(item => {
+                const li = document.createElement('li');
+                li.textContent = item;
+                list.appendChild(li);
+            });
+        }
+
+        // Charts Rendering Functions
+        function renderGaugeChart(score) {
+            if (gaugeChartInstance) {
+                gaugeChartInstance.destroy();
+            }
+
+            let color = '#3b82f6';
+            if (score >= 80) color = '#10b981';
+            else if (score >= 60) color = '#3b82f6';
+            else if (score >= 40) color = '#f59e0b';
+            else color = '#ef4444';
+
+            const options = {
+                chart: {
+                    height: 220,
+                    type: 'radialBar',
+                },
+                series: [score],
+                colors: [color],
+                plotOptions: {
+                    radialBar: {
+                        startAngle: -135,
+                        endAngle: 135,
+                        hollow: {
+                            size: '70%',
+                        },
+                        track: {
+                            background: '#374151',
+                            strokeWidth: '100%',
+                        },
+                        dataLabels: {
+                            name: {
+                                show: true,
+                                color: '#9ca3af',
+                                fontSize: '12px',
+                                offsetY: 80
+                            },
+                            value: {
+                                show: true,
+                                color: '#f3f4f6',
+                                fontSize: '32px',
+                                fontWeight: 800,
+                                offsetY: -10,
+                                formatter: function (val) {
+                                    return val + '%';
+                                }
+                            }
+                        }
+                    }
+                },
+                fill: {
+                    type: 'gradient',
+                    gradient: {
+                        shade: 'dark',
+                        type: 'horizontal',
+                        gradientToColors: [color],
+                        stops: [0, 100]
+                    }
+                },
+                stroke: {
+                    lineCap: 'round'
+                },
+                labels: ['ATS Compatibility Score']
+            };
+
+            gaugeChartInstance = new ApexCharts(document.querySelector("#gaugeChart"), options);
+            gaugeChartInstance.render();
+        }
+
+        function renderRadarChart(breakdown) {
+            if (radarChartInstance) {
+                radarChartInstance.destroy();
+            }
+
+            const categories = [
+                'Semantic Similarity',
+                'Skills Alignment',
+                'Experience Suitability',
+                'Education Suitability'
+            ];
+
+            const seriesData = [
+                breakdown.semantic_similarity,
+                breakdown.skills_alignment,
+                breakdown.experience_suitability,
+                breakdown.education_suitability
+            ];
+
+            const options = {
+                chart: {
+                    height: 220,
+                    type: 'radar',
+                    toolbar: {
+                        show: false
+                    }
+                },
+                series: [{
+                    name: 'Relevance',
+                    data: seriesData,
+                }],
+                colors: ['#3b82f6'],
+                stroke: {
+                    width: 2
+                },
+                fill: {
+                    opacity: 0.2
+                },
+                markers: {
+                    size: 4,
+                    colors: ['#3b82f6'],
+                    strokeColor: '#0b0f19',
+                    strokeWidth: 2,
+                },
+                xaxis: {
+                    categories: categories,
+                    labels: {
+                        style: {
+                            colors: ['#9ca3af', '#9ca3af', '#9ca3af', '#9ca3af'],
+                            fontSize: '11px',
+                            fontFamily: 'inherit',
+                            fontWeight: 600,
+                        }
+                    }
+                },
+                yaxis: {
+                    show: false,
+                    min: 0,
+                    max: 100
+                },
+                grid: {
+                    borderColor: '#374151',
+                }
+            };
+
+            radarChartInstance = new ApexCharts(document.querySelector("#radarChart"), options);
+            radarChartInstance.render();
+        }
+    </script>
+</body>
+</html>
+"""
+
+@app.route('/')
+def home():
+    return render_template_string(HTML_TEMPLATE)
+
+@app.route('/analyze', methods=['POST'])
+def analyze():
+    try:
+        # Check if file is provided
+        if 'resume' not in request.files:
+            return jsonify({"error": "No resume file provided"}), 400
         
-        jd_text = ""
-        if jd_input_method == "Paste Text":
-            jd_text = st.text_area("Paste Job Description here:", height=130, placeholder="We are looking for a Software Engineer with Python and SQL experience...")
-        else:
-            uploaded_jd_file = st.file_uploader("Upload Job Description File", type=["pdf", "docx", "txt"])
-            if uploaded_jd_file:
-                try:
-                    jd_text = jd_parser.extract_text(uploaded_jd_file, uploaded_jd_file.name)
-                except Exception as e:
-                    st.error(f"Error reading Job Description: {e}")
-        st.markdown('</div>', unsafe_allow_html=True)
-
-    # Trigger Analysis
-    if st.button("🚀 Analyze Resume", type="primary", use_container_width=True):
-        if not uploaded_resume:
-            st.warning("Please upload a resume file first.")
-        elif not jd_text.strip():
-            st.warning("Please provide a Job Description.")
-        else:
-            with st.spinner("Analyzing resume content against job description using NLP..."):
-                try:
-                    # 1. Parse Resume
-                    resume_bytes = uploaded_resume.read()
-                    resume_data = r_parser.parse(resume_bytes, uploaded_resume.name)
-                    
-                    # 2. Parse JD
-                    jd_data = jd_parser.parse(jd_text, title="Target Position")
-                    
-                    # 3. Extract Skills
-                    resume_skills = skill_extractor.extract_skills(resume_data["cleaned_text"])
-                    jd_skills = skill_extractor.extract_skills(jd_data["cleaned_text"])
-                    
-                    # 4. Perform Skill Gap Analysis
-                    gap_analysis = skill_extractor.get_skill_gap(resume_skills, jd_skills)
-                    
-                    # 5. ML Similarity Model (TF-IDF Cosine Similarity)
-                    similarity_score = sim_model.calculate_similarity(
-                        resume_data["cleaned_text"], 
-                        jd_data["cleaned_text"]
-                    )
-                    
-                    # 6. Qualification Evaluations
-                    candidate_exp = ats_model.extract_years_of_experience(resume_data["cleaned_text"])
-                    education_score = ats_model.evaluate_education(
-                        resume_data["cleaned_text"], 
-                        jd_data["education_requirement"]
-                    )
-                    
-                    # 7. Overall ATS Score Calculation
-                    total_jd_skills = gap_analysis["summary"]["total_jd_skills"]
-                    total_matched_skills = gap_analysis["summary"]["total_matched_skills"]
-                    
-                    score_details = ats_model.predict_score(
-                        similarity_score=similarity_score,
-                        skills_found_count=total_matched_skills,
-                        total_jd_skills_count=total_jd_skills,
-                        candidate_exp=candidate_exp,
-                        required_exp=jd_data["min_experience"],
-                        education_score=education_score
-                    )
-                    
-                    # 8. Improvement Suggestions
-                    suggestions = ats_scorer.generate_suggestions(resume_data, jd_data, gap_analysis)
-                    
-                    # Display Results
-                    st.success("Analysis Completed Successfully!")
-                    
-                    # Layout Results Dashboard
-                    st.markdown("### 📊 Matching Dashboard")
-                    
-                    row1_col1, row1_col2, row1_col3 = st.columns([1, 1, 1.2])
-                    
-                    with row1_col1:
-                        # Gauge Chart
-                        st.markdown('<div class="premium-card">', unsafe_allow_html=True)
-                        fig_gauge = create_gauge_chart(score_details["ats_score"])
-                        st.plotly_chart(fig_gauge, use_container_width=True)
-                        
-                        # Display Badge Grade
-                        grade = score_details["grade"]
-                        if grade == "Strong Match":
-                            badge_class = "badge-strong"
-                        elif grade == "Good Match":
-                            badge_class = "badge-good"
-                        elif grade == "Average Match":
-                            badge_class = "badge-average"
-                        else:
-                            badge_class = "badge-needs"
-                            
-                        st.markdown(f"<div style='text-align: center;'>Match Status: <span class='badge {badge_class}'>{grade}</span></div>", unsafe_allow_html=True)
-                        st.markdown('</div>', unsafe_allow_html=True)
-                        
-                    with row1_col2:
-                        # Radar Chart
-                        st.markdown('<div class="premium-card">', unsafe_allow_html=True)
-                        fig_radar = create_radar_chart(score_details["breakdown"])
-                        st.plotly_chart(fig_radar, use_container_width=True)
-                        st.markdown('</div>', unsafe_allow_html=True)
-                        
-                    with row1_col3:
-                        # Candidate Meta Card
-                        st.markdown('<div class="premium-card"><div class="card-title">Candidate Details</div>', unsafe_allow_html=True)
-                        st.markdown(f"**Name:** {resume_data['name']}")
-                        st.markdown(f"**Email:** {resume_data['email'] or 'Not Found'}")
-                        st.markdown(f"**Phone:** {resume_data['phone'] or 'Not Found'}")
-                        st.markdown(f"**Extracted Experience:** {candidate_exp} years")
-                        st.markdown(f"**Education Detected:** {jd_parser.extract_education_requirement(resume_data['cleaned_text'])}")
-                        
-                        st.markdown("<hr style='margin: 0.75rem 0;'>", unsafe_allow_html=True)
-                        st.markdown(f"**JD Experience Requirement:** {jd_data['min_experience']} years")
-                        st.markdown(f"**JD Education Requirement:** {jd_data['education_requirement']}")
-                        st.markdown('</div>', unsafe_allow_html=True)
-
-                    # Row 2: Skills Gap and Suggestions tabs
-                    tab1, tab2, tab3 = st.tabs(["🎯 Skill Gap Analysis", "💡 Actionable Recommendations", "📝 Extracted Sections"])
-                    
-                    with tab1:
-                        st.markdown('<div class="premium-card">', unsafe_allow_html=True)
-                        skill_cols = st.columns([1, 1])
-                        
-                        # Skills Donut Chart
-                        with skill_cols[0]:
-                            st.write("**Skills Matching Metrics**")
-                            fig_donut = create_skill_donut_chart(total_matched_skills, total_jd_skills - total_matched_skills)
-                            st.plotly_chart(fig_donut, use_container_width=True)
-                            
-                        with skill_cols[1]:
-                            st.write("**Key Skill Coverage**")
-                            categories = ["Technical Skills", "Soft Skills", "Tools & Technologies"]
-                            for cat in categories:
-                                found = gap_analysis["found_skills"].get(cat, [])
-                                missing = gap_analysis["missing_skills"].get(cat, [])
-                                
-                                st.write(f"**{cat}**")
-                                if not found and not missing:
-                                    st.caption("No skills detected in this category.")
-                                    continue
-                                    
-                                pills_html = ""
-                                for f in found:
-                                    pills_html += f"<span class='skill-pill pill-found'>{f}</span>"
-                                for m in missing:
-                                    pills_html += f"<span class='skill-pill pill-missing'>{m}</span>"
-                                st.markdown(pills_html, unsafe_allow_html=True)
-                                st.write("")
-                        st.markdown('</div>', unsafe_allow_html=True)
-                        
-                    with tab2:
-                        st.markdown('<div class="premium-card">', unsafe_allow_html=True)
-                        
-                        rec_cols = st.columns([1, 1])
-                        with rec_cols[0]:
-                            st.markdown("##### 🧱 Structure & Keyword Optimization")
-                            
-                            # Section structure suggestions
-                            if suggestions["structure_and_formatting"]:
-                                st.write("**Formatting & Sections:**")
-                                for tip in suggestions["structure_and_formatting"]:
-                                    st.write(f"- {tip}")
-                            else:
-                                st.success("Your resume structure looks perfect and contains all essential sections!")
-                                
-                            # Keyword density suggestions
-                            if suggestions["seo_and_keyword_stuffing"]:
-                                st.write("**SEO & Keyword Stuffing:**")
-                                for tip in suggestions["seo_and_keyword_stuffing"]:
-                                    st.write(f"- {tip}")
-                            else:
-                                st.success("Keyword density is natural. No stuffing detected.")
-                                
-                        with rec_cols[1]:
-                            st.markdown("##### ✍️ Phrasing & Skill Improvements")
-                            
-                            # Action verbs suggestions
-                            if suggestions["phrasing_and_language"]:
-                                st.write("**Active Phrasing & Verbs:**")
-                                for tip in suggestions["phrasing_and_language"]:
-                                    st.write(f"- {tip}")
-                            else:
-                                st.success("Great job! Your resume uses strong action verbs to showcase achievements.")
-                                
-                            # Skills gaps suggestions
-                            if suggestions["skills_gap_remediation"]:
-                                st.write("**Skills Gaps suggestions:**")
-                                for tip in suggestions["skills_gap_remediation"]:
-                                    st.write(f"- {tip}")
-                                    
-                        st.markdown('</div>', unsafe_allow_html=True)
-                        
-                    with tab3:
-                        st.markdown('<div class="premium-card">', unsafe_allow_html=True)
-                        for sec_name, sec_text in resume_data["sections"].items():
-                            if sec_text.strip():
-                                with st.expander(f"Section: {sec_name.upper()}"):
-                                    st.text(sec_text)
-                        st.markdown('</div>', unsafe_allow_html=True)
-
-                except Exception as e:
-                    st.error(f"Error during analysis: {str(e)}")
-                    st.exception(e)
-
-# ----------------- PORTAL 2: RECRUITER PORTAL -----------------
-else:
-    st.subheader("💼 Recruiter Dashboard & Candidate Ranking")
-    
-    col1, col2 = st.columns([1, 1.2])
-    
-    # 1. Manage Job Descriptions
-    with col1:
-        st.markdown('<div class="premium-card"><div class="card-title">Manage Job Descriptions</div>', unsafe_allow_html=True)
+        file = request.files['resume']
+        if file.filename == '':
+            return jsonify({"error": "No selected file"}), 400
         
-        # Load existing Job Descriptions
-        all_jds = db.get_all_job_descriptions()
-        jd_options = {jd["id"]: f"{jd['title']} (ID: {jd['id']})" for jd in all_jds}
+        jd_text = request.form.get('jd_text', '').strip()
+        min_experience = float(request.form.get('min_experience', 0.0))
+        education_requirement = request.form.get('education_requirement', 'Not Specified')
         
-        jd_selection = st.selectbox(
-            "Select Job Description Profile",
-            options=list(jd_options.keys()),
-            format_func=lambda x: jd_options[x],
-            help="Select an existing JD to rank candidates against, or create a new one below."
+        if not jd_text:
+            return jsonify({"error": "No job description text provided"}), 400
+            
+        file_bytes = file.read()
+        file_name = file.filename
+        
+        # 1. Parse Resume
+        resume_data = r_parser.parse(file_bytes, file_name)
+        
+        # 2. Parse JD
+        jd_data = jd_parser.parse(jd_text, title="Target Position")
+        # Override JD values with manual user inputs if provided, otherwise use parsed ones
+        if min_experience > 0:
+            jd_data["min_experience"] = min_experience
+        if education_requirement != 'Not Specified':
+            jd_data["education_requirement"] = education_requirement
+            
+        # 3. Extract Skills
+        resume_skills = skill_extractor.extract_skills(resume_data["cleaned_text"])
+        jd_skills = skill_extractor.extract_skills(jd_data["cleaned_text"])
+        
+        # 4. Perform Skill Gap Analysis
+        gap_analysis = skill_extractor.get_skill_gap(resume_skills, jd_skills)
+        
+        # 5. ML Similarity Model (TF-IDF Cosine Similarity)
+        similarity_score = sim_model.calculate_similarity(
+            resume_data["cleaned_text"], 
+            jd_data["cleaned_text"]
         )
         
-        st.write("---")
-        st.write("**Create New Job Profile**")
-        new_title = st.text_input("Job Title:", placeholder="Senior Python Engineer")
-        new_jd_text = st.text_area("Job Description Details:", height=100, placeholder="Requirements and skills detail...")
+        # 6. Qualification Evaluations
+        candidate_exp = ats_model.extract_years_of_experience(resume_data["cleaned_text"])
+        education_score = ats_model.evaluate_education(
+            resume_data["cleaned_text"], 
+            jd_data["education_requirement"]
+        )
         
-        if st.button("➕ Create Job Profile", type="secondary"):
-            if not new_title.strip() or not new_jd_text.strip():
-                st.error("Please fill in Job Title and Description.")
-            else:
-                try:
-                    # Parse JD to extract skills, experience, education
-                    jd_parsed = jd_parser.parse(new_jd_text, title=new_title)
-                    skills_extracted = skill_extractor.extract_skills(jd_parsed["cleaned_text"])
-                    flat_skills = []
-                    for s in skills_extracted.values():
-                        flat_skills.extend(s)
-                        
-                    db.add_job_description(
-                        title=new_title,
-                        raw_text=new_jd_text,
-                        required_skills=flat_skills,
-                        min_experience=jd_parsed["min_experience"],
-                        education_requirements=jd_parsed["education_requirement"]
-                    )
-                    st.success(f"Job Profile '{new_title}' created successfully!")
-                    st.rerun()
-                except Exception as e:
-                    st.error(f"Failed to create Job Profile: {e}")
+        # 7. Overall ATS Score Calculation
+        total_jd_skills = gap_analysis["summary"]["total_jd_skills"]
+        total_matched_skills = gap_analysis["summary"]["total_matched_skills"]
         
-        st.markdown('</div>', unsafe_allow_html=True)
-
-    # 2. Upload and Rank Resumes
-    with col2:
-        st.markdown('<div class="premium-card"><div class="card-title">Rank Candidates</div>', unsafe_allow_html=True)
+        score_details = ats_model.predict_score(
+            similarity_score=similarity_score,
+            skills_found_count=total_matched_skills,
+            total_jd_skills_count=total_jd_skills,
+            candidate_exp=candidate_exp,
+            required_exp=jd_data["min_experience"],
+            education_score=education_score
+        )
         
-        if not jd_selection:
-            st.info("Please create a Job Description Profile first to enable resume uploading.")
-        else:
-            selected_jd_data = db.get_job_description(jd_selection)
-            st.markdown(f"**Currently Evaluating For:** {selected_jd_data['title']}")
-            st.markdown(f"**Required Experience:** {selected_jd_data['min_experience']} years | **Min Education:** {selected_jd_data['education_requirements']}")
+        # 8. Improvement Suggestions
+        suggestions = ats_scorer.generate_suggestions(resume_data, jd_data, gap_analysis)
+        
+        # Optional: Save to SQLite database (wrapped in try-except in case of serverless read-only errors)
+        try:
+            c_id = db.add_candidate(
+                name=resume_data["name"],
+                email=resume_data["email"],
+                phone=resume_data["phone"]
+            )
+            flat_res_skills = []
+            for s in resume_skills.values():
+                flat_res_skills.extend(s)
             
-            st.write("---")
-            uploaded_resumes = st.file_uploader(
-                "Upload Candidate Resumes (Multiple PDFs/DOCXs)", 
-                type=["pdf", "docx"], 
-                accept_multiple_files=True
+            r_id = db.add_resume(
+                candidate_id=c_id,
+                file_path=file_name,
+                raw_text=resume_data["raw_text"],
+                parsed_skills=flat_res_skills,
+                parsed_education=jd_parser.extract_education_requirement(resume_data["cleaned_text"]),
+                parsed_experience=str(candidate_exp)
             )
             
-            if st.button("⚡ Rank Resumes", type="primary", use_container_width=True):
-                if not uploaded_resumes:
-                    st.warning("Please upload at least one candidate resume.")
-                else:
-                    progress_bar = st.progress(0)
-                    total_files = len(uploaded_resumes)
-                    success_count = 0
-                    
-                    for idx, file in enumerate(uploaded_resumes):
-                        try:
-                            # 1. Read & Parse Resume
-                            file_bytes = file.read()
-                            resume_data = r_parser.parse(file_bytes, file.name)
-                            
-                            # 2. Add Candidate
-                            c_id = db.add_candidate(
-                                name=resume_data["name"],
-                                email=resume_data["email"],
-                                phone=resume_data["phone"]
-                            )
-                            
-                            # 3. Add Resume
-                            resume_skills = skill_extractor.extract_skills(resume_data["cleaned_text"])
-                            flat_res_skills = []
-                            for s in resume_skills.values():
-                                flat_res_skills.extend(s)
-                                
-                            r_id = db.add_resume(
-                                candidate_id=c_id,
-                                file_path=file.name,
-                                raw_text=resume_data["raw_text"],
-                                parsed_skills=flat_res_skills,
-                                parsed_education=jd_parser.extract_education_requirement(resume_data["cleaned_text"]),
-                                parsed_experience=str(ats_model.extract_years_of_experience(resume_data["cleaned_text"]))
-                            )
-                            
-                            # 4. Perform scoring
-                            similarity_score = sim_model.calculate_similarity(
-                                resume_data["cleaned_text"], 
-                                selected_jd_data["raw_text"]
-                            )
-                            
-                            candidate_exp = ats_model.extract_years_of_experience(resume_data["cleaned_text"])
-                            education_score = ats_model.evaluate_education(
-                                resume_data["cleaned_text"],
-                                selected_jd_data["education_requirements"]
-                            )
-                            
-                            # Skills gap counts
-                            # Convert selected JD list of skills to structured format
-                            jd_skills_categorized = skill_extractor.extract_skills(selected_jd_data["raw_text"])
-                            gap_analysis = skill_extractor.get_skill_gap(resume_skills, jd_skills_categorized)
-                            
-                            score_details = ats_model.predict_score(
-                                similarity_score=similarity_score,
-                                skills_found_count=gap_analysis["summary"]["total_matched_skills"],
-                                total_jd_skills_count=gap_analysis["summary"]["total_jd_skills"],
-                                candidate_exp=candidate_exp,
-                                required_exp=selected_jd_data["min_experience"],
-                                education_score=education_score
-                            )
-                            
-                            suggestions = ats_scorer.generate_suggestions(resume_data, selected_jd_data, gap_analysis)
-                            
-                            # 5. Store match results
-                            db.add_match_result(
-                                resume_id=r_id,
-                                jd_id=selected_jd_data["id"],
-                                match_percentage=score_details["breakdown"]["skills_alignment"],  # Or average / ats_score
-                                ats_score=score_details["ats_score"],
-                                skills_found=gap_analysis["found_skills"]["Technical Skills"] + gap_analysis["found_skills"]["Tools & Technologies"],
-                                skills_missing=gap_analysis["missing_skills"]["Technical Skills"] + gap_analysis["missing_skills"]["Tools & Technologies"],
-                                feedback=suggestions
-                            )
-                            success_count += 1
-                        except Exception as e:
-                            st.error(f"Error parsing candidate '{file.name}': {e}")
-                            
-                        # Update progress
-                        progress_bar.progress((idx + 1) / total_files)
-                        
-                    st.success(f"Successfully evaluated and ranked {success_count}/{total_files} candidates!")
-                    st.rerun()
-                    
-        st.markdown('</div>', unsafe_allow_html=True)
-
-    # 3. Ranking Leaderboard & Analysis
-    st.write("---")
-    st.markdown("### 🏆 Candidate Leaderboard")
-    
-    if jd_selection:
-        leaderboard = db.get_leaderboard(jd_selection)
-        selected_jd_data = db.get_job_description(jd_selection)
-        
-        if not leaderboard:
-            st.info("No candidates evaluated yet for this Job Profile. Upload resumes above to compile a leaderboard.")
-        else:
-            lead_col1, lead_col2 = st.columns([1.5, 1])
+            jd_flat_skills = []
+            for s in jd_skills.values():
+                jd_flat_skills.extend(s)
             
-            with lead_col1:
-                st.markdown('<div class="premium-card"><div class="card-title">Ranking Table</div>', unsafe_allow_html=True)
-                
-                # Convert to clean dataframe for display
-                leaderboard_df = pd.DataFrame(leaderboard)
-                display_df = leaderboard_df[[
-                    "candidate_name", "candidate_email", "file_path", 
-                    "ats_score", "analyzed_at"
-                ]].copy()
-                
-                display_df.columns = ["Candidate Name", "Email", "Resume File", "ATS Score", "Evaluation Date"]
-                display_df = display_df.sort_values(by="ATS Score", ascending=False).reset_index(drop=True)
-                
-                st.dataframe(display_df, use_container_width=True)
-                st.markdown('</div>', unsafe_allow_html=True)
-                
-            with lead_col2:
-                st.markdown('<div class="premium-card"><div class="card-title">Score Comparison</div>', unsafe_allow_html=True)
-                # Plotly leaderboard chart
-                # Format leaderboard dictionary structure slightly for plotly chart
-                formatted_list = [
-                    {"candidate_name": entry["candidate_name"], "match_percentage": entry["ats_score"]} 
-                    for entry in leaderboard
-                ]
-                fig_leaderboard = create_leaderboard_chart(formatted_list)
-                st.plotly_chart(fig_leaderboard, use_container_width=True)
-                st.markdown('</div>', unsafe_allow_html=True)
+            # Add JD
+            jd_id = db.add_job_description(
+                title=jd_data.get("title", "Target Position"),
+                raw_text=jd_text,
+                required_skills=jd_flat_skills,
+                min_experience=jd_data["min_experience"],
+                education_requirements=jd_data["education_requirement"]
+            )
+            
+            db.add_match_result(
+                resume_id=r_id,
+                jd_id=jd_id,
+                match_percentage=score_details["breakdown"]["skills_alignment"],
+                ats_score=score_details["ats_score"],
+                skills_found=gap_analysis["found_skills"].get("Technical Skills", []) + gap_analysis["found_skills"].get("Tools & Technologies", []),
+                skills_missing=gap_analysis["missing_skills"].get("Technical Skills", []) + gap_analysis["missing_skills"].get("Tools & Technologies", []),
+                feedback=suggestions
+            )
+        except Exception as db_err:
+            print(f"Database write ignored in serverless: {db_err}")
 
-            # Interactive candidate drilldown
-            st.markdown("#### 🔬 Detailed Candidate Drilldown")
-            for idx, candidate in enumerate(leaderboard):
-                with st.expander(f"Rank {idx+1}: {candidate['candidate_name']} — ATS Score: {candidate['ats_score']}/100"):
-                    d_col1, d_col2 = st.columns([1, 1])
-                    
-                    with d_col1:
-                        st.markdown("**Core Candidate Info**")
-                        st.write(f"- **Email:** {candidate['candidate_email']}")
-                        st.write(f"- **File Name:** {candidate['file_path']}")
-                        
-                        st.write("**Matched Skills:**")
-                        if candidate["skills_found"]:
-                            pills_html = "".join([f"<span class='skill-pill pill-found'>{s}</span>" for s in candidate["skills_found"]])
-                            st.markdown(pills_html, unsafe_allow_html=True)
-                        else:
-                            st.caption("No matching skills detected.")
-                            
-                        st.write("**Missing Skills:**")
-                        if candidate["skills_missing"]:
-                            pills_html = "".join([f"<span class='skill-pill pill-missing'>{s}</span>" for s in candidate["skills_missing"]])
-                            st.markdown(pills_html, unsafe_allow_html=True)
-                        else:
-                            st.caption("No missing skills detected.")
-                            
-                    with d_col2:
-                        st.markdown("**Suggestions & Improvement Tips**")
-                        # Deserialize feedback JSON
-                        feedback_data = {}
-                        if isinstance(candidate["feedback"], str):
-                            try:
-                                feedback_data = json.loads(candidate["feedback"])
-                            except:
-                                pass
-                        elif isinstance(candidate["feedback"], dict):
-                            feedback_data = candidate["feedback"]
-                            
-                        if feedback_data:
-                            # Show tips
-                            for cat_name, tips in feedback_data.items():
-                                if cat_name == "metrics":
-                                    continue
-                                if tips:
-                                    st.write(f"**{cat_name.replace('_', ' ').title()}:**")
-                                    for t in tips[:3]:  # Top 3 tips
-                                        st.write(f" - {t}")
-                        else:
-                            st.write("No feedback suggestions available.")
-                            
-            # Delete JD Profile option
-            st.write("")
-            if st.button("🗑️ Delete Current Job Profile and Results", type="secondary"):
-                db.delete_job_description(jd_selection)
-                st.success("Job profile and all associated candidate match results deleted.")
-                st.rerun()
+        # Construct final JSON response
+        response_data = {
+            "candidate_details": {
+                "name": resume_data["name"],
+                "email": resume_data["email"] or "Not Found",
+                "phone": resume_data["phone"] or "Not Found",
+                "extracted_experience": candidate_exp,
+                "education_detected": jd_parser.extract_education_requirement(resume_data["cleaned_text"])
+            },
+            "jd_requirements": {
+                "min_experience": jd_data["min_experience"],
+                "education_requirement": jd_data["education_requirement"]
+            },
+            "score_details": score_details,
+            "gap_analysis": gap_analysis,
+            "suggestions": suggestions
+        }
+        
+        return jsonify(response_data)
+        
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return jsonify({"error": str(e)}), 500
+
+if __name__ == '__main__':
+    app.run(debug=True, port=5000)

@@ -7,4 +7,5 @@ pandas>=2.0.0
 scikit-learn>=1.3.0
 plotly>=5.18.0
 matplotlib>=3.8.0
-sqlite3-to-mysql>=1.4.0 # Optional, but we will use built-in sqlite3 which requires no install
+sqlite3-to-mysql>=1.4.0
+flask>=3.0.0
