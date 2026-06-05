@@ -1,12 +1,11 @@
 import os
-import pandas as pd
-import spacy
-from spacy.matcher import PhraseMatcher
+import csv
+import re
 from typing import Dict, List, Set, Any
 
 class SkillExtractor:
     """
-    NLP-based skill extraction engine using spaCy's PhraseMatcher.
+    Pure-Python skill extraction engine using boundary-aware regular expressions.
     Reads a reference vocabulary of skills, matches them against text, 
     and categorizes the results.
     """
@@ -14,19 +13,9 @@ class SkillExtractor:
     def __init__(self, dataset_path: str = None):
         """
         Initialize the SkillExtractor by loading the skills taxonomy.
-        
-        Args:
-            dataset_path: Path to the skills CSV dataset. If None, looks for it in data/skills_dataset.csv
         """
-        # Load spaCy blank English model for fast tokenization and phrase matching
-        try:
-            self.nlp = spacy.blank("en")
-        except Exception as e:
-            # Fallback if blank model fails (should not fail as spacy is installed)
-            self.nlp = spacy.load("en_core_web_sm")
-
         self.skills_dict = {}  # skill_name (lowercase) -> category
-        self.matcher = PhraseMatcher(self.nlp.vocab, attr="LOWER")
+        self.patterns = {}     # skill_name -> compiled regex pattern
         
         # Determine CSV dataset path
         if not dataset_path:
@@ -37,7 +26,7 @@ class SkillExtractor:
         self._load_skills(dataset_path)
 
     def _load_skills(self, dataset_path: str):
-        """Loads skills from CSV file and creates spaCy PhraseMatcher rules."""
+        """Loads skills from CSV file and creates compiled regex pattern rules."""
         # Baseline fallback skills if file is not found
         fallback_skills = {
             "python": "Technical Skills",
@@ -61,13 +50,15 @@ class SkillExtractor:
 
         if os.path.exists(dataset_path):
             try:
-                df = pd.read_csv(dataset_path)
-                # Drop rows with NaN values
-                df = df.dropna(subset=['skill', 'category'])
-                for _, row in df.iterrows():
-                    skill = str(row['skill']).strip().lower()
-                    category = str(row['category']).strip()
-                    self.skills_dict[skill] = category
+                with open(dataset_path, mode='r', encoding='utf-8') as f:
+                    reader = csv.DictReader(f)
+                    for row in reader:
+                        skill = row.get('skill')
+                        category = row.get('category')
+                        if skill and category:
+                            skill_clean = str(skill).strip().lower()
+                            category_clean = str(category).strip()
+                            self.skills_dict[skill_clean] = category_clean
             except Exception as e:
                 print(f"Warning: Failed to load skills dataset from {dataset_path}: {e}. Using fallbacks.")
                 self.skills_dict = fallback_skills
@@ -75,15 +66,15 @@ class SkillExtractor:
             print(f"Warning: Skills dataset path not found at {dataset_path}. Using fallbacks.")
             self.skills_dict = fallback_skills
 
-        # Build spaCy doc objects for PhraseMatcher
-        patterns = []
+        # Precompile boundary-aware regex patterns for each skill
         for skill in self.skills_dict.keys():
-            # Standard doc representation
-            doc = self.nlp.make_doc(skill)
-            patterns.append(doc)
-            
-        # Add patterns to matcher under "SKILL" ID
-        self.matcher.add("SKILL", patterns)
+            escaped = re.escape(skill)
+            # Custom boundary checks:
+            # - (?<![a-zA-Z0-9_]) checks that the matched skill starts at a word boundary
+            # - (?![a-zA-Z0-9_]) checks that the matched skill ends at a word boundary
+            # This matches c++, c#, .net etc. correctly without false matching internal strings.
+            pattern_str = r'(?<![a-zA-Z0-9_])' + escaped + r'(?![a-zA-Z0-9_])'
+            self.patterns[skill] = re.compile(pattern_str, re.IGNORECASE)
 
     def extract_skills(self, text: str) -> Dict[str, List[str]]:
         """
@@ -94,11 +85,6 @@ class SkillExtractor:
             
         Returns:
             Dict[str, List[str]]: Categorized lists of unique skills.
-            e.g. {
-                "Technical Skills": ["python", "machine learning"],
-                "Soft Skills": ["communication"],
-                "Tools & Technologies": ["git", "aws"]
-            }
         """
         if not text:
             return {
@@ -107,24 +93,19 @@ class SkillExtractor:
                 "Tools & Technologies": []
             }
 
-        doc = self.nlp(text)
-        matches = self.matcher(doc)
-
-        # Set of extracted skills to avoid duplicates
+        lower_text = text.lower()
         extracted = {
             "Technical Skills": set(),
             "Soft Skills": set(),
             "Tools & Technologies": set()
         }
 
-        for match_id, start, end in matches:
-            span = doc[start:end]
-            matched_text = span.text.strip().lower()
-            
-            # Retrieve category
-            category = self.skills_dict.get(matched_text)
-            if category in extracted:
-                extracted[category].add(matched_text)
+        for skill, category in self.skills_dict.items():
+            # Quick substring search before running regex to maximize execution speed
+            if skill in lower_text:
+                if self.patterns[skill].search(lower_text):
+                    if category in extracted:
+                        extracted[category].add(skill)
 
         # Convert sets to sorted lists for deterministic output
         return {cat: sorted(list(skills)) for cat, skills in extracted.items()}
